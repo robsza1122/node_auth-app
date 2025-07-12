@@ -15,8 +15,6 @@ export const authMiddleware = (req, res, next) => {
         return;
     }
 
-    const tokenData = readAccessToken(token)
-
     console.log(token)
     try {
         const data = jwt.verify(token, process.env.JWT_SECRET);

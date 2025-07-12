@@ -1,19 +1,25 @@
 import { User } from "../models/user.js";
-import { sendActivationMail } from "../services/mail-service.js";
+import { sendActivationMail, sendPasswordResetEmail } from "../services/mail-service.js";
 import { consumeActivationToken, findActivatedUserByEmail, generateActivationToken } from "../services/users-service.js";
 import { ApiError } from "../exceptions/api-error.js";
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
-import { validateEmail, validatePassword } from "../utils/validation.js";
+import { validateEmail, validatePassword, validateUserName } from "../utils/validation.js";
 import { createAccessToken, createRefreshToken, readRefreshToken } from "../services/jwt-service.js";
 import { tokenService } from "../services/tokens-service.js";
 
 async function register(req, res, next) {
-  const { email, password } = req.body;
+  const { email, password, name } = req.body;
 
       const existedUser = await User.findOne({
         where: {email}
     })
+
+    const existedName = await User.findOne({
+      where: {name}
+    })
+
+
 
     if (existedUser !== null) {
         throw ApiError.BadRequest("User already exists", {
@@ -21,8 +27,15 @@ async function register(req, res, next) {
         });
     }
 
+        if (existedName !== null) {
+      throw ApiError.BadRequest("This username already exists", {
+        username: "This username is used by another user"
+      })
+    }
+
   const emailError = validateEmail(email);
   const passwordError = validatePassword(password);
+  const userNameError = validateUserName(name);
 
   if (emailError) {
     throw ApiError.BadRequest('Bad Request', {
@@ -36,6 +49,13 @@ async function register(req, res, next) {
     }
     )
   }
+
+  if (userNameError) {
+    throw ApiError.BadRequest('Bad Request', {
+      message: userNameError,
+    }
+    )
+  }
   const activationToken = generateActivationToken();
 
   const userLength = await User.count()
@@ -43,15 +63,15 @@ async function register(req, res, next) {
 
     const hashPassword = await bcrypt.hash(password, 10);
 
-    const user = await User.create({id, email, password: hashPassword, activationToken}) 
+    const user = await User.create({id, email, name, password: hashPassword, activationToken})
 
-    
+
 
     await sendActivationMail(email, activationToken);
 
     res.status(201).send({
       id: user.id,
-      email: user.email,
+      username: user.name,
     })
 }
 
@@ -66,7 +86,7 @@ async function logout(req, res, next) {
   }
 
   res.status(204)
-  
+
 }
 
 async function activate(req, res, next) {
@@ -84,14 +104,14 @@ async function activate(req, res, next) {
   await consumeActivationToken(user);
 
   res.send(`User with id ${user.id} is activated`);
-  
+
 }
 
 async function login(req, res, next) {
-  const {email, password} = req.body;
+  const { name, password} = req.body;
 
   const user = await User.findOne({
-    where: {email}
+    where: {name}
   })
 
   if (user.activationToken !== null) {
@@ -132,10 +152,10 @@ async function sendAuth(user, res) {
       email: user.email,
     }
   })
-  
+
 }
 
-export async function refresh(req, res, next) {
+    async function refresh(req, res, next) {
   const {refreshToken} = req.cookies;
 
   const userData = readRefreshToken(refreshToken);
@@ -154,7 +174,78 @@ export async function refresh(req, res, next) {
 
   return sendAuth(user, res);
 
-  
+
+}
+
+async function sendReset(req, res, next) {
+  const {email} = req.body;
+  const user = await User.findOne({
+    where: {email, activationToken: null}
+  })
+
+  if (!user) {
+    throw ApiError.NotFound();
+  }
+
+  console.log(user)
+
+
+  const token = generateActivationToken();
+
+    await sendPasswordResetEmail(user?.email, token);
+
+    user.resetToken = token;
+
+    await user.save();
+
+  res.status(200).send(`Password reset email sent on user with id ${user.id}`)
+}
+
+async function resetPassword(req, res, next) {
+  const {resetToken} = req.params;
+  const {oldPassword, newPassword, confirmPassword} = req.body;
+
+  const passwordError = validatePassword(newPassword);
+
+  const hashNewPassword = bcrypt.hash(newPassword, 10);
+  const user = await User.findOne({
+    where: {resetToken}
+  })
+
+  if (!user) {
+    throw ApiError.NotFound();
+  }
+
+  if (!await bcrypt.compare(oldPassword, user.password)) {
+    throw ApiError.BadRequest("Wrong Password", {
+      password: "This password is wrong"
+    })
+  }
+
+  if (await bcrypt.compare(newPassword, user.password)) {
+    throw ApiError.BadRequest("Wrong Password", {
+      password: "New password must be different than old password"
+    })
+  }
+
+  if (newPassword !== confirmPassword) {
+    throw ApiError.BadRequest("Wrong Password", {
+      password: "Passwords are different"
+    })
+  }
+
+  if (passwordError) {
+    throw ApiError.BadRequest("Wrong password", {
+      message: passwordError,
+    })
+  }
+
+  user.resetToken = null;
+  user.password = hashNewPassword;
+
+  await user.save();
+
+  res.status(200).send("Password changed successfully");
 }
 
 export const authController = {
@@ -163,4 +254,7 @@ export const authController = {
   login,
   refresh,
   logout,
+  sendReset,
+  resetPassword,
 };
+

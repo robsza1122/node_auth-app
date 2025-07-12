@@ -35,3 +35,14 @@ export async function sendMail({ to, subject, text, html }) {
         <a href="${link}">${link}</a>`
     })
   }
+
+  export async function sendPasswordResetEmail(email, activationToken)  {
+    const link = `${process.env.CLIENT_URL}/reset/${activationToken}`;
+    await sendMail({
+      to: email,
+      subject: 'Reset your password',
+      html: `
+      <p> Click this link below to reset your password.</p>
+        <a href="${link}">${link}</a>`
+    })
+  }

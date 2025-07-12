@@ -9,3 +9,5 @@ authRouter.get("/activate/:activationToken", catchError(authController.activate)
 authRouter.get('/refresh', catchError(authController.refresh));
 authRouter.post('/login', catchError(authController.login));
 authRouter.post('/logout', catchError(authController.logout));
+authRouter.get('/sendReset', catchError(authController.sendReset));
+authRouter.post('/resetPassword/:resetToken', catchError(authController.resetPassword));
