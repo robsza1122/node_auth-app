@@ -4,7 +4,7 @@ export const authMiddleware = (req, res, next) => {
     // console.log(req.headers.authorization);
     const auth = req.headers.authorization;
     if (!auth) {
-        res.status(401);
+        res.sendStatus(401);
         return;
     }
 

@@ -85,7 +85,7 @@ async function logout(req, res, next) {
     await tokenService.remove(userData.id);
   }
 
-  res.status(204)
+  res.end();
 
 }
 
@@ -114,14 +114,14 @@ async function login(req, res, next) {
     where: {name}
   })
 
+    if (!user) {
+    throw ApiError.NotFound();
+  }
+
   if (user.activationToken !== null) {
     throw ApiError.BadRequest("User is not activated", {
       email: "Please activate your account first"
     });
-  }
-
-  if (!user) {
-    throw ApiError.NotFound();
   }
 
   if (!await bcrypt.compare(password, user.password)) {
@@ -207,7 +207,7 @@ async function resetPassword(req, res, next) {
 
   const passwordError = validatePassword(newPassword);
 
-  const hashNewPassword = bcrypt.hash(newPassword, 10);
+  const hashNewPassword = await bcrypt.hash(newPassword, 10);
   const user = await User.findOne({
     where: {resetToken}
   })

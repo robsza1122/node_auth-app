@@ -5,7 +5,6 @@ export const catchError = (middleware) => {
         } catch (error) {
             console.error(`Error in middleware: ${error.message}`);
             res.status(500).send(error);
-            next(error);
         }
     }
 }
